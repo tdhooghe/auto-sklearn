@@ -62,7 +62,7 @@ def get_dataset(dataset='iris', make_sparse=False, add_NaNs=False,
     Y_test = Y[train_size:]
 
     if add_NaNs:
-        mask = rs.choice([True, False], size=(X_train.shape))
+        mask = rs.choice([True, False], size=(X_train.shape), p=(.95, .05))
         X_train[mask] = np.NaN
 
     if make_sparse:

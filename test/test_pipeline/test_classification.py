@@ -231,10 +231,23 @@ class SimpleClassificationPipelineTest(unittest.TestCase):
                                   dataset_properties=dataset_properties)
 
     def test_configurations_sparse(self):
-        cs = SimpleClassificationPipeline(dataset_properties={'sparse': True}).\
-            get_hyperparameter_search_space()
+        """Test a random set of configurations when the data is sparse.
 
-        self._test_configurations(configurations_space=cs, make_sparse=True)
+        Expects
+        -------
+        * All randomly selected configurations should be able to fit on sparse data.
+        * All randomly selected configurations should be able to predict on sparse data.
+        * All randomly selected configuratinos should be able to predict_proba on sparse_data.
+        """
+        dataset_properties = {"sparse": True}
+        pipeline = SimpleClassificationPipeline(dataset_properties=dataset_properties)
+        cs = pipeline.get_hyperparameter_search_space()
+
+        self._test_configurations(
+            configurations_space=cs,
+            make_sparse=True,
+            dataset_properties=dataset_properties
+        )
 
     def test_configurations_categorical_data(self):
         cs = SimpleClassificationPipeline(
@@ -307,10 +320,52 @@ class SimpleClassificationPipelineTest(unittest.TestCase):
         limit = 3072 * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
+        if dataset_properties is not None:
+            if "signed" in dataset_properties and dataset_properties["signed"] is True:
+                cls = SimpleClassificationPipeline(
+                    include={"feature_preprocessor": ["fast_ica"]},
+                    dataset_properties=dataset_properties,
+                )
+                configurations_space = cls.get_hyperparameter_search_space()
+                forced = {
+                    "feature_preprocessor:fast_ica:algorithm": 'deflation',
+                    "feature_preprocessor:fast_ica:fun": 'exp',
+                    "feature_preprocessor:fast_ica:whiten": 'False'
+                }
+                remove = []
+            elif "sparse" in dataset_properties and dataset_properties["sparse"] is True:
+                cls = SimpleClassificationPipeline(
+                    include={
+                        "classifier": ["qda"],
+                        "feature_preprocessor": ["kernel_pca"],
+                    },
+                    dataset_properties=dataset_properties,
+                )
+                configurations_space = cls.get_hyperparameter_search_space()
+                remove = ["feature_preprocessor:__choice__"]
+                forced = {
+                    "feature_preprocessor:kernel_pca:kernel": 'rbf',
+                    "feature_preprocessor:kernel_pca:gamma": 2.351280410584469,
+                    "feature_preprocessor:kernel_pca:n_components": 10,
+                }
+        else:
+            remove = []
+            forced = {}
+
         for i in range(10):
             config = configurations_space.sample_configuration()
-            config._populate_values()
+            config._populate_values(),
 
+
+            for remove_key in remove:
+                for config_key in config:
+                    if remove_key in config_key:
+                        del config._values[config_key]
+
+            for key, val in forced.items():
+                config[key] = val
+
+            print(config._values)
             # Restrict configurations which could take too long on travis-ci
             restrictions = {'classifier:passive_aggressive:n_iter': 5,
                             'classifier:sgd:n_iter': 5,
@@ -336,7 +391,7 @@ class SimpleClassificationPipelineTest(unittest.TestCase):
 
             if data is None:
                 X_train, Y_train, X_test, Y_test = get_dataset(
-                    dataset='digits', make_sparse=make_sparse, add_NaNs=True)
+                    dataset='digits', make_sparse=make_sparse, add_NaNs=False)
             else:
                 X_train = data['X_train'].copy()
                 Y_train = data['Y_train'].copy()
@@ -348,6 +403,10 @@ class SimpleClassificationPipelineTest(unittest.TestCase):
                 random_state=1,
                 dataset_properties=dataset_properties,
                 init_params=init_params_,
+                include={
+                    "classifier": ["qda"],
+                    "feature_preprocessor": ["kernel_pca"],
+                }
             )
             cls.set_hyperparameters(config, init_params=init_params_)
 
@@ -396,7 +455,9 @@ class SimpleClassificationPipelineTest(unittest.TestCase):
                 elif 'Internal work array size computation failed' in e.args[0]:
                     continue
                 else:
-                    print(config)
+                    print(dict(config))
+                    print(X_train)
+                    print(Y_train)
                     print(traceback.format_exc())
                     raise e
             except RuntimeWarning as e:
