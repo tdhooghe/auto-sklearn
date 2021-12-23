@@ -20,7 +20,6 @@ from smac.tae.serial_runner import SerialRunner
 from smac.tae.dask_runner import DaskParallelRunner
 from smac.callbacks import IncorporateRunResultCallback
 
-
 import autosklearn.metalearning
 from autosklearn.constants import MULTILABEL_CLASSIFICATION, \
     BINARY_CLASSIFICATION, TASK_TYPES_TO_STRING, CLASSIFICATION_TASKS, \
@@ -34,6 +33,9 @@ from autosklearn.util.parallel import preload_modules
 from autosklearn.metalearning.metalearning.meta_base import MetaBase
 from autosklearn.metalearning.metafeatures.metafeatures import \
     calculate_all_metafeatures_with_labels, calculate_all_metafeatures_encoded_labels
+
+from autosklearn.experimental.hyperboost.lgbm import LightGBM
+from autosklearn.experimental.hyperboost.acquistion_function import ScorePlusDistance
 
 EXCLUDE_META_FEATURES_CLASSIFICATION = {
     'Landmark1NN',
@@ -72,6 +74,7 @@ EXCLUDE_META_FEATURES_REGRESSION = {
 def get_send_warnings_to_logger(logger):
     def _send_warnings_to_log(message, category, filename, lineno, file, line):
         logger.debug('%s:%s: %s:%s', filename, lineno, category.__name__, message)
+
     return _send_warnings_to_log
 
 
@@ -177,13 +180,14 @@ def _print_debug_info_of_init_configuration(initial_configurations, basename,
 
 
 def get_smac_object(
-    scenario_dict,
-    seed,
-    ta,
-    ta_kwargs,
-    metalearning_configurations,
-    n_jobs,
-    dask_client,
+        scenario_dict,
+        seed,
+        ta,
+        ta_kwargs,
+        metalearning_configurations,
+        n_jobs,
+        dask_client,
+        surrogate_model
 ):
     if len(scenario_dict['instances']) > 1:
         intensifier = Intensifier
@@ -197,18 +201,46 @@ def get_smac_object(
     else:
         initial_configurations = None
     rh2EPM = RunHistory2EPM4LogCost
-    return SMAC4AC(
-        scenario=scenario,
-        rng=seed,
-        runhistory2epm=rh2EPM,
-        tae_runner=ta,
-        tae_runner_kwargs=ta_kwargs,
-        initial_configurations=initial_configurations,
-        run_id=seed,
-        intensifier=intensifier,
-        dask_client=dask_client,
-        n_jobs=n_jobs,
-    )
+
+    # Check if AutoML classifier instantiated with default surrogate model, and use the other one if not
+    if surrogate_model is None:
+        return SMAC4AC(
+            scenario=scenario,
+            rng=seed,
+            runhistory2epm=rh2EPM,
+            tae_runner=ta,
+            tae_runner_kwargs=ta_kwargs,
+            initial_configurations=initial_configurations,
+            run_id=seed,
+            intensifier=intensifier,
+            dask_client=dask_client,
+            n_jobs=n_jobs,
+        )
+
+    elif surrogate_model == 'LightGBM':
+        model_kwargs = dict()
+        model_kwargs['min_child_samples'] = 1
+        model_kwargs['alpha'] = 0.9
+        model_kwargs['num_leaves'] = 8
+        model_kwargs['min_data_in_bin'] = 1
+        model_kwargs['n_jobs'] = -1
+        model_kwargs['n_estimators'] = 100
+
+        return SMAC4AC(
+            scenario=scenario,
+            rng=seed,
+            runhistory2epm=rh2EPM,
+            tae_runner=ta,
+            tae_runner_kwargs=ta_kwargs,
+            initial_configurations=initial_configurations,
+            run_id=seed,
+            intensifier=intensifier,
+            dask_client=dask_client,
+            n_jobs=n_jobs,
+            model=LightGBM,
+            model_kwargs=model_kwargs,
+            acquisition_function=ScorePlusDistance
+        )
 
 
 class AutoMLSMBO(object):
@@ -239,7 +271,8 @@ class AutoMLSMBO(object):
                  scoring_functions=None,
                  pynisher_context='spawn',
                  ensemble_callback: typing.Optional[EnsembleBuilderManager] = None,
-                 trials_callback: typing.Optional[IncorporateRunResultCallback] = None
+                 trials_callback: typing.Optional[IncorporateRunResultCallback] = None,
+                 surrogate_model=None
                  ):
         super(AutoMLSMBO, self).__init__()
         # data related
@@ -296,6 +329,8 @@ class AutoMLSMBO(object):
                 name=logger_name,
                 port=self.port,
             )
+
+        self.surrogate_model = surrogate_model
 
     def reset_data_manager(self, max_mem=None):
         if max_mem is None:
@@ -482,6 +517,8 @@ class AutoMLSMBO(object):
             'metalearning_configurations': metalearning_configurations,
             'n_jobs': self.n_jobs,
             'dask_client': self.dask_client,
+            'surrogate_model': self.surrogate_model,
+            # 'surrogate_model_args' : self.surrogate_model_args
         }
         if self.get_smac_object_callback is not None:
             smac = self.get_smac_object_callback(**smac_args)
@@ -572,8 +609,8 @@ class AutoMLSMBO(object):
                 metafeature_calculation_end_time = time.time()
                 metafeature_calculation_time_limit = \
                     metafeature_calculation_time_limit - (
-                        metafeature_calculation_end_time -
-                        metafeature_calculation_start_time)
+                            metafeature_calculation_end_time -
+                            metafeature_calculation_start_time)
 
                 if metafeature_calculation_time_limit < 1:
                     self.logger.warning(

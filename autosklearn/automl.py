@@ -184,7 +184,8 @@ class AutoML(BaseEstimator):
                  logging_config=None,
                  metric=None,
                  scoring_functions=None,
-                 get_trials_callback=None
+                 get_trials_callback=None,
+                 surrogate_model=None
                  ):
         super(AutoML, self).__init__()
         self.configuration_space = None
@@ -276,6 +277,9 @@ class AutoML(BaseEstimator):
         # It can be seen as an identifier for each configuration
         # saved to disk
         self.num_run = 0
+
+        self._surrogate_model = surrogate_model
+
 
     def _create_backend(self) -> Backend:
         return create(
@@ -920,7 +924,8 @@ class AutoML(BaseEstimator):
                 port=self._logger_port,
                 pynisher_context=self._multiprocessing_context,
                 ensemble_callback=proc_ensemble,
-                trials_callback=self._get_trials_callback
+                trials_callback=self._get_trials_callback,
+                surrogate_model=self._surrogate_model
             )
 
             try:

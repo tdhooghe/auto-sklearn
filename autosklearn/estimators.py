@@ -50,7 +50,8 @@ class AutoSklearnEstimator(BaseEstimator):
         metric=None,
         scoring_functions: Optional[List[Scorer]] = None,
         load_models: bool = True,
-        get_trials_callback=None
+        get_trials_callback=None,
+        surrogate_model=None
     ):
         """
         Parameters
@@ -281,6 +282,8 @@ class AutoSklearnEstimator(BaseEstimator):
         else:
             self._n_jobs = self.n_jobs
 
+        self.surrogate_model=surrogate_model
+
         super().__init__()
 
     def __getstate__(self):
@@ -314,7 +317,8 @@ class AutoSklearnEstimator(BaseEstimator):
             metadata_directory=self.metadata_directory,
             metric=self.metric,
             scoring_functions=self.scoring_functions,
-            get_trials_callback=self.get_trials_callback
+            get_trials_callback=self.get_trials_callback,
+            surrogate_model=self.surrogate_model
         )
 
         return automl
