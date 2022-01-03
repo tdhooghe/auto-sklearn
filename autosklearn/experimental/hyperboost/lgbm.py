@@ -3,9 +3,7 @@ import typing
 import numpy as np
 from lightgbm import LGBMRegressor
 from scipy.spatial import cKDTree
-from sklearn.decomposition import PCA
 from smac.configspace import ConfigurationSpace
-
 from smac.epm.base_epm import AbstractEPM
 
 
@@ -84,11 +82,11 @@ class LightGBM(AbstractEPM):
         # print(X_)
 
         self.X = X
-        print(f'Shape X {X.shape}')
-        print(f'X {X[-1]}')
+        # print(f'Shape X {X.shape}')
+        # print(f'X {X[-1]}')
         self.y = y.flatten()
-        print(f'Shape y {y.shape}')
-        print(f'y {y[-1]}')
+        # print(f'Shape y {y.shape}')
+        # print(f'y {y[-1]}')
         # self.X_transformed = self.transform(X)
         self.inc = np.max(self.y)
         n_samples = self.X.shape[0]
