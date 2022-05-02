@@ -10,32 +10,30 @@ import warnings
 
 import dask.distributed
 import pynisher
-
+from smac.callbacks import IncorporateRunResultCallback
 from smac.facade.smac_ac_facade import SMAC4AC
-from smac.intensification.simple_intensifier import SimpleIntensifier
 from smac.intensification.intensification import Intensifier
+from smac.intensification.simple_intensifier import SimpleIntensifier
 from smac.runhistory.runhistory2epm import RunHistory2EPM4LogCost
 from smac.scenario.scenario import Scenario
-from smac.tae.serial_runner import SerialRunner
 from smac.tae.dask_runner import DaskParallelRunner
-from smac.callbacks import IncorporateRunResultCallback
+from smac.tae.serial_runner import SerialRunner
 
 import autosklearn.metalearning
 from autosklearn.constants import MULTILABEL_CLASSIFICATION, \
     BINARY_CLASSIFICATION, TASK_TYPES_TO_STRING, CLASSIFICATION_TASKS, \
     MULTICLASS_CLASSIFICATION, REGRESSION, MULTIOUTPUT_REGRESSION
-from autosklearn.ensemble_builder import EnsembleBuilderManager
-from autosklearn.metalearning.mismbo import suggest_via_metalearning
 from autosklearn.data.abstract_data_manager import AbstractDataManager
+from autosklearn.ensemble_builder import EnsembleBuilderManager
 from autosklearn.evaluation import ExecuteTaFuncWithQueue, get_cost_of_crash
-from autosklearn.util.logging_ import get_named_client_logger
-from autosklearn.util.parallel import preload_modules
-from autosklearn.metalearning.metalearning.meta_base import MetaBase
+from autosklearn.experimental.hyperboost.acquistion_function import ScorePlusDistance
+from autosklearn.experimental.hyperboost.lgbm import LightGBM
 from autosklearn.metalearning.metafeatures.metafeatures import \
     calculate_all_metafeatures_with_labels, calculate_all_metafeatures_encoded_labels
-
-from autosklearn.experimental.hyperboost.lgbm import LightGBM
-from autosklearn.experimental.hyperboost.acquistion_function import ScorePlusDistance
+from autosklearn.metalearning.metalearning.meta_base import MetaBase
+from autosklearn.metalearning.mismbo import suggest_via_metalearning
+from autosklearn.util.logging_ import get_named_client_logger
+from autosklearn.util.parallel import preload_modules
 
 EXCLUDE_META_FEATURES_CLASSIFICATION = {
     'Landmark1NN',
@@ -518,7 +516,6 @@ class AutoMLSMBO(object):
             'n_jobs': self.n_jobs,
             'dask_client': self.dask_client,
             'surrogate_model': self.surrogate_model,
-            # 'surrogate_model_args' : self.surrogate_model_args
         }
         if self.get_smac_object_callback is not None:
             smac = self.get_smac_object_callback(**smac_args)
